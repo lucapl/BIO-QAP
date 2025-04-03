@@ -1,0 +1,8 @@
+*.code-workspace
+.vscode
+.venv
+out
+qap
+*.exe
+*.txt
+*.zip
