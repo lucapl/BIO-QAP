@@ -86,7 +86,7 @@ void random_walk(QAP_Solution out_solution, QAP_Problem* problem, SolverStats* s
     //copy_array(best_solution, out_solution, problem->get_n());
     //generate_random_permutation(out_solution, problem->get_n());
     unsigned int current_value = problem->calculate_solution_value(out_solution);
-    unsigned int best_value = current_value;
+    unsigned int best_value = UINT_MAX;
     stats->evaluations = 1;
     unsigned int i, j;
     stats->steps = 0;
@@ -133,5 +133,35 @@ void random_search(QAP_Solution out_solution, QAP_Problem* problem, SolverStats*
 }
 
 void heuristic(QAP_Solution out_solution, QAP_Problem* problem, SolverStats* stats){
+    stats->evaluations = 0;
+    stats->steps = 0;
 
+    bool* assigned = new bool[problem->get_n()];
+    for (unsigned int i = 0; i<problem->get_n(); i++){
+        assigned[i] = false;
+    }
+
+    assigned[out_solution[0]] = true;
+    
+    for(unsigned int i = 1; i<problem->get_n(); i++){
+        int best_j = -1;
+        unsigned int best_val = UINT_MAX;
+        for(int j = 0; j<problem->get_n(); j++){
+            unsigned int value = 0;
+            if(assigned[j]){
+                continue;
+            }
+            out_solution[i] = j;
+            value = problem->calculate_last_value_added(out_solution, i+1);
+            stats->evaluations++;
+            if(value < best_val){
+                best_j = j;
+                best_val = value;
+            }
+        }
+        out_solution[i] = best_j;
+        assigned[best_j] = true;
+    }
+
+    delete assigned;
 }

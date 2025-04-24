@@ -8,8 +8,37 @@ unsigned int QAP_Problem::get_optimal_value(){
     return known_optimum_value;
 }
 
+int QAP_Problem::get_flow(unsigned int i, unsigned int j){
+    return A[i][j];
+}
+
+int QAP_Problem::get_cost(unsigned int i, unsigned int j){
+    return B[i][j];
+}
+
 QAP_Solution QAP_Problem::get_optimal_solution(){
     return known_optimum;
+}
+
+unsigned int QAP_Problem::calculate_partial_solution_value(QAP_Solution solution, unsigned int length){
+    int value = 0;
+    for(int i = 0; i<length;i++){
+        for(int j = 0; j<length; j++){
+            value += this->A[i][j]*this->B[solution[i]][solution[j]];
+        }
+    }
+
+    return value;
+}
+
+unsigned int QAP_Problem::calculate_last_value_added(QAP_Solution solution, unsigned int length){
+    int value = 0;
+    for(int i = 0; i<length;i++){
+        value += this->A[i][length-1]*this->B[solution[i]][solution[length-1]];
+        value += this->A[length-1][i]*this->B[solution[length-1]][solution[i]];
+    }
+
+    return value;
 }
 
 unsigned int QAP_Problem::calculate_solution_value(QAP_Solution solution){
@@ -49,7 +78,11 @@ int QAP_Problem::calculate_solution_value_change(QAP_Solution solution, unsigned
 }
 
 QAP_Problem::QAP_Problem(std::string filepath, std::string filename){
-    std::ifstream data_file(filepath+filename+".dat");
+    std::string full_path = filepath+filename+".dat";
+    std::ifstream data_file(full_path);
+    if(data_file.fail()){
+        throw std::invalid_argument("File not found "+full_path);
+    }
     this->name = filename;
     // load size
     data_file >> this->n;
@@ -72,11 +105,15 @@ QAP_Problem::QAP_Problem(std::string filepath, std::string filename){
         }
     }
     data_file.close();
-    std::ifstream solution_file(filepath+filename+".sln");
+    std::string solution_file_path = filepath+filename+".sln";
+    std::ifstream solution_file(solution_file_path);
+    if(solution_file.fail()){
+        throw std::invalid_argument("File not found " + solution_file_path);
+    }
     int sln_n;
     solution_file >> sln_n;
     if (sln_n != this->n){
-        std::cerr << "Solution size: " << sln_n << " is not equal to instance size: " << this->n << "!" << std::endl; 
+        std::cerr << "Warning! Solution size: " << sln_n << " is not equal to instance size: " << this->n << "!" << std::endl; 
     }
     
     solution_file >> this->known_optimum_value;

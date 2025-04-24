@@ -28,7 +28,9 @@ void print_usage_message(){
     "\n\tOptional: -h --help - show usage" <<
     "\n\tOptional: -p --data_path <string> - path to instance folders" <<
     "\n\nOutput is formatted as:" <<
-    "\n\tinstance_name instance_size repetitions" <<
+    "\n\tinstance_name instance_size optimal_value" <<
+    "\n\toptimal_solution" <<
+    "\n\trepetitions" <<
     "\nThen <repetitions> lines of" <<
     "\n\tinitial_solution" << 
     "\n\tfinal_solution" <<
@@ -69,10 +71,18 @@ int Experiment::parse_arguments(int argc, char** argv){
         if (selected_solver == NONE){
             std::string solvers_str(argv[i]);
             selected_solver = get_solver_type(solvers_str);
+            if (selected_solver == INVALID){
+                std::cerr << "Invalid solver name: "+solvers_str<< std::endl;
+                return 1;
+            }
             continue;
         }
         if(repetitions == -1){
             repetitions = atoi(argv[i]);
+            if (repetitions < 1){
+                std::cerr << "Invalid number of repetitions: "+std::string(argv[i])<< std::endl;
+                return 1;
+            }
             continue;
         }
         if(selected_solver == LOCAL_SEARCH && ls_not_init){
@@ -91,7 +101,12 @@ int Experiment::parse_arguments(int argc, char** argv){
     std::string instance_str(instance_name);
     std::string data_path_str(data_path);
 
-    problem = new QAP_Problem(data_path_str, instance_str);
+    try{
+        problem = new QAP_Problem(data_path_str, instance_str);
+    } catch(std::invalid_argument &e){
+        std::cerr << "Invalid argument: " << e.what() << std::endl;
+        return 1;
+    }
 
     return 0;
 }

@@ -6,3 +6,5 @@ qap
 *.exe
 *.txt
 *.zip
+__pycache__
+*.7z
