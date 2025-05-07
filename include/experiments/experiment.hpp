@@ -1,5 +1,6 @@
 #ifndef EXPERIMENT_HPP_
 #define EXPERIMENT_HPP_
+#define DEBUG false
 #include "qap.hpp"
 #include <chrono>
 
@@ -9,8 +10,23 @@ enum SolverType {
     RANDOM_SEARCH,
     HEURISTIC,
     INVALID,
-    SUMILATED_ANNEALING,
+    TABU_SEARCH,
+    SIMULATED_ANNEALING,
     NONE
+};
+
+struct TS_args{
+    unsigned int no_improv_iters;
+    unsigned int tabu_tenure;
+    double top_percent;
+    double quality_drop_limit;
+};
+
+struct SA_args{
+    unsigned int no_improv_iters;
+    double temperature;
+    double temperature_decrease;
+    double chain_lenght_percent;
 };
 
 class Experiment{
@@ -20,6 +36,8 @@ class Experiment{
         SolverType selected_solver;
         std::chrono::nanoseconds duration;
         bool is_ls_steepest;
+        TS_args* ts_args;
+        SA_args* sa_args;
 
     public:
         int parse_arguments(int argc, char** argv);

@@ -4,7 +4,6 @@
 #include <stdlib.h> 
 #include <iostream>
 #include <map>
-
 #include "util.hpp"
 #include "solvers.hpp"
 #include "experiments/experiment.hpp"
@@ -16,7 +15,8 @@ SolverType get_solver_type(const std::string& solver_name) {
         {"random_walk", RANDOM_WALK},
         {"random_search", RANDOM_SEARCH},
         {"heuristic", HEURISTIC},
-        {"simulated_annealing", SUMILATED_ANNEALING}
+        {"simulated_annealing", SIMULATED_ANNEALING},
+        {"tabu_search", TABU_SEARCH}
     };
 
     auto it = solver_map.find(solver_name);
@@ -55,6 +55,8 @@ int Experiment::parse_arguments(int argc, char** argv){
     long long duration_long = 0;
     bool duration_not_init = true;
     bool ls_not_init = true;
+    sa_args = new SA_args;
+    ts_args = new TS_args;
 
     for(int i = 1; i < argc;i++){
         if(is_non_pos_argument(argv[i], "-h", "--help")){
@@ -97,6 +99,21 @@ int Experiment::parse_arguments(int argc, char** argv){
             duration_not_init = false;
             continue;
         }
+        if (selected_solver == TABU_SEARCH && i + 3 < argc) {
+            ts_args->no_improv_iters     = std::stoul(argv[i++]);
+            ts_args->tabu_tenure         = std::stoul(argv[i++]);
+            ts_args->top_percent         = std::stod(argv[i++]);
+            ts_args->quality_drop_limit  = std::stod(argv[i++]);
+            continue;
+        }
+
+        if (selected_solver == SIMULATED_ANNEALING && i + 3 < argc) {
+            sa_args->no_improv_iters         = std::stoul(argv[i++]);
+            sa_args->temperature             = std::stod(argv[i++]);
+            sa_args->temperature_decrease    = std::stod(argv[i++]);
+            sa_args->chain_lenght_percent    = std::stod(argv[i++]);
+            continue;
+        }
     }
 
     std::string instance_str(instance_name);
@@ -137,6 +154,12 @@ int Experiment::run(){
                 break;
             case HEURISTIC:
                 heuristic(solution, problem, &stats);
+                break;
+            case TABU_SEARCH:
+                tabu_search(solution, problem, &stats, ts_args->no_improv_iters, ts_args->tabu_tenure, ts_args->top_percent, ts_args->quality_drop_limit);
+                break;
+            case SIMULATED_ANNEALING:
+                simulated_annealing(solution, problem, &stats, sa_args->no_improv_iters, sa_args->temperature, sa_args->temperature_decrease, sa_args->chain_lenght_percent);
                 break;
             case INVALID:
                 std::cerr << "Invalid solver type!" << std::endl;

@@ -1,6 +1,8 @@
 #ifndef SOLVERS_HPP
 #define SOLVERS_HPP
 #include <chrono>
+#include <cmath>
+#include <limits>
 #include "qap.hpp"
 #include "util.hpp"
 
@@ -30,7 +32,13 @@ void local_search(QAP_Solution out_solution, QAP_Problem* problem, SolverStats* 
 void random_walk(QAP_Solution out_solution, QAP_Problem* problem, SolverStats* stats, std::chrono::nanoseconds duration);
 void random_search(QAP_Solution out_solution, QAP_Problem* problem, SolverStats* stats, std::chrono::nanoseconds duration);
 void heuristic(QAP_Solution out_solution, QAP_Problem* problem, SolverStats* stats);
-void simulated_annealing(QAP_Solution out_solution, QAP_Problem* problem, SolverStats* stats, double temperature, double temperature_decrease, double chain_lenght_percent);
+void simulated_annealing(QAP_Solution out_solution, QAP_Problem* problem, SolverStats* stats, unsigned int no_improv_iters, double temperature, double temperature_decrease, double chain_lenght_percent);
+
+struct Move{
+    unsigned int i;
+    unsigned int j;
+    int delta;
+};
 
 class Tabu_List{
     private:
@@ -46,12 +54,7 @@ class Tabu_List{
         unsigned int get_tabu(Move* move);
         void make_tabu(unsigned int i, unsigned int j);
         void update(unsigned int i, unsigned int j);
-};
-
-struct Move{
-    unsigned int i;
-    unsigned int j;
-    int delta;
+        void update(Move* move);
 };
 
 class Candidate_Neighbourhood{
@@ -59,19 +62,20 @@ class Candidate_Neighbourhood{
         QAP_Problem* problem;
         Move** moves;
         Move* best_move;
-        int* order;
+        SolverStats* stats;
         unsigned int total_length;
         unsigned int k;
     public:
-        Candidate_Neighbourhood(QAP_Problem* problem, double top_percent);
+        Candidate_Neighbourhood(QAP_Problem* problem, SolverStats* stats, double top_percent);
         ~Candidate_Neighbourhood();
         void construct(QAP_Solution solution, unsigned int* locations);
-        void reevaluate(QAP_Solution solution, unsigned int* locations, Tabu_List* tabu_list, unsigned int current_value, unsigned int best_value);
+        void reevaluate(QAP_Solution solution, unsigned int* locations);
+        void find_best(Tabu_List* tabu_list, unsigned int current_value, unsigned int best_value);
         int get_best_delta();
         unsigned int best_first();
         unsigned int best_second();
 };
 
-void tabu_search(QAP_Solution out_solution, QAP_Problem* problem, SolverStats* stats, ...);
+void tabu_search(QAP_Solution out_solution, QAP_Problem* problem, SolverStats* stats, unsigned int no_improv_iters, unsigned int tabu_tenure, double top_percent, double quality_drop_limit);
 
 #endif

@@ -43,6 +43,7 @@ bool EarlyStopper::should_stop(unsigned int value){
         best_value = value;
         iter = 0;
     }
+    iter++;
     return iter >= no_improv_iters;
 }
 

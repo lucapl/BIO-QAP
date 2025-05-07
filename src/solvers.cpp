@@ -18,11 +18,11 @@ Neighbourhood::Neighbourhood(unsigned int n){
 }
 
 Neighbourhood::~Neighbourhood(){
-    delete order;
+    delete[] order;
     for(int i = 0; i < length; i++){
-        delete pairs[i];
+        delete[] pairs[i];
     }
-    delete pairs;
+    delete[] pairs;
 }
 
 unsigned int Neighbourhood::get(unsigned int k, unsigned int l){
@@ -59,16 +59,17 @@ Tabu_List::Tabu_List(QAP_Problem* problem, unsigned int tabu_tenure){
 
 Tabu_List::~Tabu_List(){
     for(int i = 0; i < length; i++){
-        delete tabu_list[i];
+        delete[] tabu_list[i];
     }
-    delete tabu_list;
+    delete[] tabu_list;
+    // std::cout << "tabu freed" <<std::endl;
 }
 
 unsigned int Tabu_List::get_tabu(unsigned int i, unsigned int j){
     unsigned int first, second;
     first = std::min(i,j);
     second = std::max(i,j);
-    return tabu_list[first][second-1];
+    return tabu_list[first][second-first-1];
 }
 
 unsigned int Tabu_List::get_tabu(Move* move){
@@ -87,15 +88,20 @@ void Tabu_List::make_tabu(unsigned int i, unsigned int j){
     unsigned int first, second;
     first = std::min(i,j);
     second = std::max(i,j);
-
-    tabu_list[first][second-1] = tabu_tenure;
+    tabu_list[first][second-first-1] = tabu_tenure;
 }
 
 void Tabu_List::update(unsigned int i, unsigned int j){
-    unsigned int first, second;
-    first = std::min(i,j);
-    second = std::max(i,j);
-    tabu_list[first][second-1]--;
+    if (is_tabu(i,j)){
+        unsigned int first, second;
+        first = std::min(i,j);
+        second = std::max(i,j);
+        tabu_list[first][second-first-1]--;
+    }
+}
+
+void Tabu_List::update(Move* move){
+    update(move->i,move->j);
 }
 
 
@@ -103,11 +109,13 @@ bool move_comparator(Move* a, Move* b){
     return a->delta < b->delta;
 }
 
-Candidate_Neighbourhood::Candidate_Neighbourhood(QAP_Problem* problem, double top_percent){
+Candidate_Neighbourhood::Candidate_Neighbourhood(QAP_Problem* problem, SolverStats* stats, double top_percent){
     this->problem = problem;
+    this->stats = stats;
     unsigned int n = problem->get_n();
     total_length = ((n*n)-n)/2;
     k = (unsigned int)std::ceil(n * top_percent);
+    moves = new Move*[total_length];
     for(int i=0; i<n; i++){
         for(int j=i+1; j<n; j++){
             unsigned int l = (i * (2 * n - i - 1)) / 2 + (j - i - 1);
@@ -118,44 +126,66 @@ Candidate_Neighbourhood::Candidate_Neighbourhood(QAP_Problem* problem, double to
     }
 }
 
+Candidate_Neighbourhood::~Candidate_Neighbourhood(){
+    for(int i = 0; i < total_length; i++){
+        delete[] moves[i];
+    }
+    delete[] moves;
+    // std::cout << "cand freed" <<std::endl;
+}
 
 void Candidate_Neighbourhood::construct(QAP_Solution solution, unsigned int* locations){
+    // std::cout << "Preval" << std::endl;
     for(int i = 0; i < total_length; i++){
         Move* move = moves[i];
         move->delta = problem->calculate_solution_value_change(solution,locations[move->i],locations[move->j]);
+        stats->evaluations++;
     }
 
+    // std::cout << "Presort" << std::endl;
     std::sort(moves, moves + total_length, move_comparator);
+    // std::cout << "Sorted" << std::endl;
 }
 
-void Candidate_Neighbourhood::reevaluate(QAP_Solution solution, unsigned int* locations, Tabu_List* tabu_list, unsigned int current_value, unsigned int best_value){
-    Move* best_value_move = moves[0];
-    Move* best_least_tabu_move = moves[0];
+void Candidate_Neighbourhood::find_best(Tabu_List* tabu_list, unsigned int current_value, unsigned int best_value){
+    Move* best_value_move = nullptr;
+    Move* best_least_tabu_move = nullptr;
 
-    for(int i = 1; i < k; i++){
+    for(int i = 0; i < k; i++){
         Move* move = moves[i];
-        move->delta = problem->calculate_solution_value_change(solution,locations[move->i],locations[move->j]);
 
-        if (move->delta < best_value_move->delta){
+        if (best_value_move == nullptr || move->delta < best_value_move->delta){
             best_value_move = move;
+            // std::cout << "better ";
         }
 
-        if (tabu_list->get_tabu(move) < tabu_list->get_tabu(best_least_tabu_move)){
+        if (best_least_tabu_move == nullptr || tabu_list->get_tabu(move) < tabu_list->get_tabu(best_least_tabu_move)){
             best_least_tabu_move = move;
         } else if (tabu_list->get_tabu(move) == tabu_list->get_tabu(best_least_tabu_move) &&
             best_least_tabu_move->delta > move->delta){
             best_least_tabu_move = move;
         }
+        tabu_list->update(move);
     }
 
     best_move = best_value_move;
 
     if(best_value_move->delta + current_value < best_value){
+        //std::cout << "Best ever seen!" << std::endl;
         return;
     }
 
     if(tabu_list->is_tabu(best_value_move)){
         best_move = best_least_tabu_move;
+        //std::cout << "Best least tabu!" << std::endl;
+    }
+}
+
+void Candidate_Neighbourhood::reevaluate(QAP_Solution solution, unsigned int* locations){
+    for(int i = 0; i < k; i++){
+        Move* move = moves[i];
+        move->delta = problem->calculate_solution_value_change(solution,locations[move->i],locations[move->j]);
+        stats->evaluations++;
     }
 }
 
@@ -176,25 +206,30 @@ void tabu_search(QAP_Solution out_solution, QAP_Problem* problem, SolverStats* s
     copy_array(current_solution, out_solution, problem->get_n());
 
     EarlyStopper stopper = EarlyStopper(no_improv_iters);
+    stats->evaluations = 1;
     unsigned int best_value = problem->calculate_solution_value(out_solution);
-    unsigned int current_value = problem->calculate_solution_value(out_solution);
+    unsigned int current_value = best_value;
 
     unsigned int* locations = new unsigned int[problem->get_n()];
-
 
     Tabu_List tabu_list = Tabu_List(problem, tabu_tenure);
     for(int i = 0; i < problem->get_n(); i++){
         int value = current_solution[i];
         locations[value] = i;
     }
-    Candidate_Neighbourhood neighbourhood = Candidate_Neighbourhood(problem, top_percent);
+
+    Candidate_Neighbourhood neighbourhood = Candidate_Neighbourhood(problem, stats, top_percent);
 
     bool stop = false;
-    unsigned int i,j,value_i,value_j;
+    unsigned int i,j,value_i,value_j, iters;
 
+    unsigned int k = 0;
+    stats->steps = 0;
     while(!stop){
-        neighbourhood.construct();
-        while(!stop && ((neighbourhood.get_best_delta()/current_value) >= quality_drop_limit)){
+        neighbourhood.construct(current_solution, locations);
+        iters = 0;
+        do{
+            neighbourhood.find_best(&tabu_list, current_value, best_value);
             value_i = neighbourhood.best_first();
             value_j = neighbourhood.best_second();
             tabu_list.make_tabu(value_i,value_j);
@@ -203,16 +238,27 @@ void tabu_search(QAP_Solution out_solution, QAP_Problem* problem, SolverStats* s
             swap(current_solution,i,j);
             locations[value_i] = j;
             locations[value_j] = i;
-
-            stop = stopper.should_stop(current_value);
             current_value += neighbourhood.get_best_delta();
-            neighbourhood.reevaluate(current_solution, locations, &tabu_list, current_value, best_value);
             if(current_value < best_value){
                 best_value = current_value;
                 copy_array(out_solution, current_solution, problem->get_n());
             }
-        }
+            stop = stopper.should_stop(current_value);
+            iters++;
+            stats->steps++;
+            neighbourhood.reevaluate(current_solution, locations);
+            //std::cout<<neighbourhood.get_best_delta()<< " " << neighbourhood.best_first() << " " << neighbourhood.best_second() << std::endl;
+        }while(!stop && ((neighbourhood.get_best_delta()/current_value) >= quality_drop_limit));
+        k++;
+        //std::cout << k <<std::endl;
     };
+}
+
+double accept_prob(int delta, double c){
+    if(delta <= 0){
+        return 1.0;
+    }
+    return exp(-((double)delta)/c);
 }
 
 double calculate_average_acceptance(int* deltas, unsigned int length, double c){
@@ -235,18 +281,18 @@ double select_initial_temperature(QAP_Solution solution, QAP_Problem* problem, N
     }
 
     double x0 = 0.0;
-    double x1 = DBL_MAX;
+    double x1 = 1e3;
     double fx0 = calculate_average_acceptance(deltas,neigh->get_length(),x0) - desired_acceptance;
-    double fx1 = calculate_average_acceptance(deltas,neigh->get_length(),x0) - desired_acceptance;
-
+    double fx1 = calculate_average_acceptance(deltas,neigh->get_length(),x1) - desired_acceptance;
+    int i = 0;
     do{
         double x2 = x1 - (fx1 * ((x1-x0)/(fx1-fx0)));
         x0 = x1;
         x1 = x2;
         fx0 = fx1;
         fx1 = calculate_average_acceptance(deltas,neigh->get_length(),x1) - desired_acceptance;
-
-    }while((x0-x1) < tol);
+        i++;
+    }while(abs(x1-x0) > tol);
 
     delete deltas;
     return (x0 + x1)/2;
@@ -257,13 +303,6 @@ unsigned int select_chain_length(QAP_Problem* problem, double alpha){
     return (((n*n)-n)/2) * alpha;
 }
 
-double accept_prob(int delta, double c){
-    if(delta <= 0){
-        return 1.0;
-    }
-    return exp(-((double)delta)/c);
-}
-
 void simulated_annealing(QAP_Solution out_solution, QAP_Problem* problem, SolverStats* stats, unsigned int no_improv_iters, double initial_acceptance, double temperature_decrease, double chain_lenght_percent){
     QAP_Solution current_solution = new int[problem->get_n()];
     copy_array(current_solution, out_solution, problem->get_n());
@@ -271,7 +310,7 @@ void simulated_annealing(QAP_Solution out_solution, QAP_Problem* problem, Solver
     unsigned int current_value = problem->calculate_solution_value(out_solution);
     stats->evaluations = 1;
     Neighbourhood neighbourhood = Neighbourhood(problem->get_n());
-    double temperature = select_initial_temperature(current_solution,problem,&neighbourhood,stats,initial_acceptance,1e-3);
+    double temperature = select_initial_temperature(current_solution,problem,&neighbourhood,stats,initial_acceptance,1e-4);
     unsigned int chain_length = select_chain_length(problem, chain_lenght_percent);
     EarlyStopper stopper = EarlyStopper(no_improv_iters*chain_length);
     

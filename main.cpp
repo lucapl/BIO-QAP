@@ -17,8 +17,9 @@ int main(int argc, char** argv){
     if(ret == 1){
         return ret;
     }
-
-    srand(time(0));
+    std::time_t seed = DEBUG?1746639054:time(0);
+    if (DEBUG) std::cout << "Seed: " << seed << std::endl;
+    srand(seed);
 
     return exp->run();
 
