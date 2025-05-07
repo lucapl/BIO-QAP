@@ -1,0 +1,10 @@
+*.code-workspace
+.vscode
+.venv
+out
+qap
+*.exe
+*.txt
+*.zip
+__pycache__
+*.7z
