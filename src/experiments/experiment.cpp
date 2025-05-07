@@ -15,7 +15,8 @@ SolverType get_solver_type(const std::string& solver_name) {
         {"local_search", LOCAL_SEARCH},
         {"random_walk", RANDOM_WALK},
         {"random_search", RANDOM_SEARCH},
-        {"heuristic", HEURISTIC}
+        {"heuristic", HEURISTIC},
+        {"simulated_annealing", SUMILATED_ANNEALING}
     };
 
     auto it = solver_map.find(solver_name);

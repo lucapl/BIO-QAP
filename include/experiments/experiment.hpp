@@ -9,6 +9,7 @@ enum SolverType {
     RANDOM_SEARCH,
     HEURISTIC,
     INVALID,
+    SUMILATED_ANNEALING,
     NONE
 };
 

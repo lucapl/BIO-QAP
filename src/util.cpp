@@ -36,3 +36,22 @@ void swap(int* array, unsigned int i, unsigned int j){
     array[j] = array[i] ^ array[j];
     array[i] = array[i] ^ array[j];
 }
+
+
+bool EarlyStopper::should_stop(unsigned int value){
+    if (value < best_value){
+        best_value = value;
+        iter = 0;
+    }
+    return iter >= no_improv_iters;
+}
+
+EarlyStopper::EarlyStopper(unsigned int no_improv_iters){
+    iter = 0;
+    this->no_improv_iters = no_improv_iters;
+    best_value = UINT_MAX;
+}
+
+double generate_random_double(){
+    return (double)(rand()) / RAND_MAX;
+}
