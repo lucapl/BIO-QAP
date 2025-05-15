@@ -8,3 +8,8 @@ qap
 *.zip
 __pycache__
 *.7z
+img
+tex2pdf*
+*_files
+*.pdf
+*.md

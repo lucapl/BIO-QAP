@@ -54,5 +54,5 @@ EarlyStopper::EarlyStopper(unsigned int no_improv_iters){
 }
 
 double generate_random_double(){
-    return (double)(rand()) / RAND_MAX;
+    return (rand() / (double)RAND_MAX);
 }

@@ -46,7 +46,7 @@ class Tabu_List{
         unsigned int tabu_tenure;
         unsigned int length;
     public:
-        Tabu_List(QAP_Problem* problem, unsigned int tabu_tenure);
+        Tabu_List(QAP_Problem* problem, double tabu_tenure);
         ~Tabu_List();
         bool is_tabu(unsigned int i, unsigned int j);
         bool is_tabu(Move* move);
@@ -76,6 +76,6 @@ class Candidate_Neighbourhood{
         unsigned int best_second();
 };
 
-void tabu_search(QAP_Solution out_solution, QAP_Problem* problem, SolverStats* stats, unsigned int no_improv_iters, unsigned int tabu_tenure, double top_percent, double quality_drop_limit);
+void tabu_search(QAP_Solution out_solution, QAP_Problem* problem, SolverStats* stats, unsigned int no_improv_iters, double tabu_tenure, double top_percent, double quality_drop_limit);
 
 #endif

@@ -17,7 +17,7 @@ enum SolverType {
 
 struct TS_args{
     unsigned int no_improv_iters;
-    unsigned int tabu_tenure;
+    double tabu_tenure;
     double top_percent;
     double quality_drop_limit;
 };

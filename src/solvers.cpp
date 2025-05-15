@@ -45,7 +45,7 @@ void Neighbourhood::shuffle(){
     offset = generate_random_number(length);
 }
 
-Tabu_List::Tabu_List(QAP_Problem* problem, unsigned int tabu_tenure){
+Tabu_List::Tabu_List(QAP_Problem* problem, double tabu_tenure){
     length = problem->get_n()-1;
     tabu_list = new unsigned int*[length];
     for(int i = 0; i < length; i++){
@@ -54,7 +54,7 @@ Tabu_List::Tabu_List(QAP_Problem* problem, unsigned int tabu_tenure){
             tabu_list[i][j] = 0;
         }
     }
-    this->tabu_tenure = tabu_tenure;
+    this->tabu_tenure = (unsigned int)(tabu_tenure * problem->get_n());
 }
 
 Tabu_List::~Tabu_List(){
@@ -201,13 +201,14 @@ unsigned int Candidate_Neighbourhood::best_second(){
     return best_move->j;
 }
 
-void tabu_search(QAP_Solution out_solution, QAP_Problem* problem, SolverStats* stats, unsigned int no_improv_iters, unsigned int tabu_tenure, double top_percent, double quality_drop_limit){
+void tabu_search(QAP_Solution out_solution, QAP_Problem* problem, SolverStats* stats, unsigned int no_improv_iters, double tabu_tenure, double top_percent, double quality_drop_limit){
     QAP_Solution current_solution = new int[problem->get_n()];
     copy_array(current_solution, out_solution, problem->get_n());
 
     EarlyStopper stopper = EarlyStopper(no_improv_iters);
     stats->evaluations = 1;
     unsigned int best_value = problem->calculate_solution_value(out_solution);
+    unsigned int best_value_checkpoint = best_value;
     unsigned int current_value = best_value;
 
     unsigned int* locations = new unsigned int[problem->get_n()];
@@ -222,36 +223,44 @@ void tabu_search(QAP_Solution out_solution, QAP_Problem* problem, SolverStats* s
 
     bool stop = false;
     unsigned int i,j,value_i,value_j, iters;
+    int delta;
 
-    unsigned int k = 0;
+    // unsigned int k = 0;
     stats->steps = 0;
     while(!stop){
         neighbourhood.construct(current_solution, locations);
-        iters = 0;
+        // iters = 0;
         do{
             neighbourhood.find_best(&tabu_list, current_value, best_value);
             value_i = neighbourhood.best_first();
             value_j = neighbourhood.best_second();
+            delta = neighbourhood.get_best_delta();
             tabu_list.make_tabu(value_i,value_j);
             i = locations[value_i];
             j = locations[value_j];
+            if(delta > 0 && current_value <= best_value){
+                best_value = current_value;
+                copy_array(out_solution, current_solution, problem->get_n());
+            }
             swap(current_solution,i,j);
             locations[value_i] = j;
             locations[value_j] = i;
             current_value += neighbourhood.get_best_delta();
             if(current_value < best_value){
                 best_value = current_value;
-                copy_array(out_solution, current_solution, problem->get_n());
             }
             stop = stopper.should_stop(current_value);
-            iters++;
+            // iters++;
             stats->steps++;
             neighbourhood.reevaluate(current_solution, locations);
             //std::cout<<neighbourhood.get_best_delta()<< " " << neighbourhood.best_first() << " " << neighbourhood.best_second() << std::endl;
-        }while(!stop && ((neighbourhood.get_best_delta()/current_value) >= quality_drop_limit));
-        k++;
+        }while(!stop && ((delta/current_value) <= quality_drop_limit));
+        // k++;
         //std::cout << k <<std::endl;
     };
+    if(current_value < best_value_checkpoint){
+        copy_array(out_solution, current_solution, problem->get_n());
+    }
 }
 
 double accept_prob(int delta, double c){
@@ -263,14 +272,40 @@ double accept_prob(int delta, double c){
 
 double calculate_average_acceptance(int* deltas, unsigned int length, double c){
     double expectation = 0.0;
+    // unsigned int count = 0;
     for (int i = 0; i < length; i++){
+        // if(deltas[i] <= 0){
+        //     continue;
+        // }
         expectation += accept_prob(deltas[i], c);
+        // count += 1;
     }
-    return expectation / length;
+    // std::cout << count << " " << expectation/count << std::endl;
+    return expectation/length; //(count!=0)?(expectation / count):1.0;
 }
 
-double select_initial_temperature(QAP_Solution solution, QAP_Problem* problem, Neighbourhood* neigh, SolverStats* stats, double desired_acceptance, double tol){
+double secant_method(int* deltas,double desired_acceptance, unsigned int neigh_size, double tol){
     // find initial temperature on the neighbourhood of initial solution using secant method
+    double x0 = 1e-3;
+    double x1 = 1.0;
+    double fx0 = calculate_average_acceptance(deltas,neigh_size,x0) - desired_acceptance;
+    double fx1 = calculate_average_acceptance(deltas,neigh_size,x1) - desired_acceptance;
+    int i = 0;
+    do{
+        double x2 = x1 - (fx1 * ((x1-x0)/(fx1-fx0)));
+        x0 = x1;
+        x1 = x2;
+        fx0 = fx1;
+        fx1 = calculate_average_acceptance(deltas,neigh_size,x1) - desired_acceptance;
+        i++;
+        // std::cout << "Temperature: " << x1 << " " << x0 << std::endl;
+    }while(fabs(fx1) > tol && fabs(x1-x0) > tol && fabs(x0/x1-1) > tol);
+
+    // std::cout << "Temperature: " << x1 << " " << x0 << " " << i << " "<< fabs(fx1) << " " << tol <<std::endl;
+    return x1;
+}
+
+double select_initial_temperature_from_neigh(QAP_Solution solution, QAP_Problem* problem, Neighbourhood* neigh, SolverStats* stats, double desired_acceptance, double tol){
     int* deltas = new int[neigh->get_length()];
 
     for(int k = 0; k < neigh->get_length(); k++){
@@ -280,22 +315,27 @@ double select_initial_temperature(QAP_Solution solution, QAP_Problem* problem, N
         stats->evaluations++;
     }
 
-    double x0 = 0.0;
-    double x1 = 1e3;
-    double fx0 = calculate_average_acceptance(deltas,neigh->get_length(),x0) - desired_acceptance;
-    double fx1 = calculate_average_acceptance(deltas,neigh->get_length(),x1) - desired_acceptance;
-    int i = 0;
-    do{
-        double x2 = x1 - (fx1 * ((x1-x0)/(fx1-fx0)));
-        x0 = x1;
-        x1 = x2;
-        fx0 = fx1;
-        fx1 = calculate_average_acceptance(deltas,neigh->get_length(),x1) - desired_acceptance;
-        i++;
-    }while(abs(x1-x0) > tol);
-
+    double temp = secant_method(deltas,desired_acceptance,neigh->get_length(),tol);
     delete deltas;
-    return (x0 + x1)/2;
+    return temp;
+}
+
+double select_initial_temperature_from_sample(QAP_Solution solution, QAP_Problem* problem, Neighbourhood* neigh, SolverStats* stats, double desired_acceptance, double tol){
+    int* deltas = new int[neigh->get_length()];
+    QAP_Solution random_solution = new int[problem->get_n()];
+
+    for(int k = 0; k < neigh->get_length(); k++){
+        generate_random_permutation(random_solution,problem->get_n());
+        unsigned int l = generate_random_number(neigh->get_length());
+        unsigned int i = neigh->first(l);
+        unsigned int j = neigh->second(l);
+        deltas[k] = problem->calculate_solution_value_change(random_solution,i,j);
+        stats->evaluations++;
+    }
+
+    double temp = secant_method(deltas,desired_acceptance,neigh->get_length(),tol);
+    delete deltas;
+    return temp;
 }
 
 unsigned int select_chain_length(QAP_Problem* problem, double alpha){
@@ -307,10 +347,11 @@ void simulated_annealing(QAP_Solution out_solution, QAP_Problem* problem, Solver
     QAP_Solution current_solution = new int[problem->get_n()];
     copy_array(current_solution, out_solution, problem->get_n());
     unsigned int best_value = problem->calculate_solution_value(out_solution);
-    unsigned int current_value = problem->calculate_solution_value(out_solution);
+    unsigned int current_value = best_value;
     stats->evaluations = 1;
     Neighbourhood neighbourhood = Neighbourhood(problem->get_n());
-    double temperature = select_initial_temperature(current_solution,problem,&neighbourhood,stats,initial_acceptance,1e-4);
+    neighbourhood.shuffle();
+    double temperature = select_initial_temperature_from_sample(current_solution,problem,&neighbourhood,stats,initial_acceptance,1e-3);
     unsigned int chain_length = select_chain_length(problem, chain_lenght_percent);
     EarlyStopper stopper = EarlyStopper(no_improv_iters*chain_length);
     
@@ -319,32 +360,43 @@ void simulated_annealing(QAP_Solution out_solution, QAP_Problem* problem, Solver
     unsigned int i, j, k;
     unsigned int iteration;
     bool stop = false;
-    iteration = 0;
+    double final_temp = 0.0001;
+    // iteration = 0;
     stats->steps = 0; // could use instead of iteration
     do{
+        // std::cout << "Temperature: " << temperature <<std::endl;
         for(unsigned int l = 0; l < chain_length; l++){
-            k = generate_random_number(neighbourhood.get_length());
-            i = neighbourhood.first(k);
-            j = neighbourhood.second(k);
+            i = neighbourhood.first(l);
+            j = neighbourhood.second(l);
             delta = problem->calculate_solution_value_change(current_solution,i,j);
             stats->evaluations++;
             if(accept_prob(delta, temperature) >= generate_random_double()){
+                neighbourhood.shuffle();
+                if(delta > 0 && current_value < best_value){
+                    best_value = current_value;
+                    copy_array(out_solution, current_solution, problem->get_n());
+                }
                 swap(current_solution, i, j);
+                stats->steps++;
                 current_value += delta;
-                stop = stopper.should_stop(current_value);
             }
-            if(current_value < best_value){
-                best_value = current_value;
-                copy_array(out_solution, current_solution, problem->get_n());
-            }
+            stop = stopper.should_stop(current_value);
             if(stop){
                 break;
             }
         }
+        if(stop && temperature != final_temp){
+            temperature = final_temp;
+            stop = false;
+            continue;
+        }
         temperature *= temperature_decrease;
-        stats->steps++;
-        iteration++;
+        temperature = std::max(temperature, final_temp);
+        // iteration++;
     }while(!stop);
+    if(current_value < best_value){
+        copy_array(out_solution, current_solution, problem->get_n());
+    }
     delete current_solution;
 }
 

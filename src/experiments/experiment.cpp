@@ -101,7 +101,7 @@ int Experiment::parse_arguments(int argc, char** argv){
         }
         if (selected_solver == TABU_SEARCH && i + 3 < argc) {
             ts_args->no_improv_iters     = std::stoul(argv[i++]);
-            ts_args->tabu_tenure         = std::stoul(argv[i++]);
+            ts_args->tabu_tenure         = std::stod(argv[i++]);
             ts_args->top_percent         = std::stod(argv[i++]);
             ts_args->quality_drop_limit  = std::stod(argv[i++]);
             continue;

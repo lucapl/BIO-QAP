@@ -30,10 +30,15 @@ def load_file(solver, instance, data_folder="./out/"):
     step = 4
     for i in range(3, len(file_lines), step):
         lines = file_lines[i:i+step]
-        starting = np.array(convert_to_ints(lines[0]))
-        final = np.array(convert_to_ints(lines[1]))
-        start_value, end_value = convert_to_ints(lines[2])
-        evals, iters, time = convert_to_ints(lines[3])
+        try:
+            starting = np.array(convert_to_ints(lines[0]))
+            final = np.array(convert_to_ints(lines[1]))
+            start_value, end_value = convert_to_ints(lines[2])
+            evals, iters, time = convert_to_ints(lines[3])
+        except:
+            print(solver, instance)
+            print(lines)
+            break
 
         solutions.append([starting, final])
         values.append([start_value, end_value])
